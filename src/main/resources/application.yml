@@ -1,0 +1,94 @@
+spring:
+  profiles:
+    active: local
+  application:
+    name: user-api
+  datasource:
+    user-db:
+      url: ${DB_URL}
+      username: ${DB_USER}
+      password: ${DB_PASSWORD}
+      driver-class-name: ${DB_DRIVER_CLASS_NAME:org.postgresql.Driver}
+  jpa:
+    hibernate:
+      ddl-auto: none
+  cloud:
+    vault:
+      enabled: true
+      config:
+        lifecycle:
+          enabled: true
+          min-renewal: 30s
+          expiry-threshold: 5m
+
+
+vault:
+  uri: ${VAULT_URI:https://localhost:8200}
+  user-db-role:
+    role-path: ${VAULT_USER_DB_ROLE_PATH:database/creds/ats-user-db-role}
+    role-id: ${VAULT_USER_DB_ROLE_ID}
+    secret-id: ${VAULT_USER_DB_SECRET_ID}
+
+server:
+  port: ${SERVER_PORT}
+  servlet:
+    context-path: /api/user
+    encoding:
+      charset: utf-8
+      enabled: true
+      force: true
+  forward-headers-strategy: framework
+
+user-api:
+  allow-swagger-without-login: false
+
+springdoc:
+  swagger-ui:
+    display-request-duration: true
+    disable-swagger-default-url: true
+    enabled: false
+    csrf:
+      enabled: true
+  show-login-endpoint: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  sql:
+    init:
+      mode: embedded
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+springdoc:
+  swagger-ui:
+    enabled: true
+
+user-api:
+  allow-swagger-without-login: true
+
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+springdoc:
+  swagger-ui:
+    enabled: true
+
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+springdoc:
+  swagger-ui:
+    enabled: false

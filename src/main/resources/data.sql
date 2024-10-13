@@ -1,0 +1,14 @@
+INSERT INTO USERS (USERNAME, PASSWORD) VALUES ('admin', '{bcrypt}$2a$10$G91Biiz2qomu/feju3BFNOyeM1hfrrdsARWW00hXi0SKPEMPLmKfW'); -- password is password123!
+INSERT INTO USERS (USERNAME, PASSWORD) VALUES ('user1', '{bcrypt}$2a$10$G91Biiz2qomu/feju3BFNOyeM1hfrrdsARWW00hXi0SKPEMPLmKfW'); -- password is password123!
+INSERT INTO USERS (USERNAME, PASSWORD) VALUES ('user2', '{bcrypt}$2a$10$G91Biiz2qomu/feju3BFNOyeM1hfrrdsARWW00hXi0SKPEMPLmKfW'); -- password is password123!
+
+INSERT INTO USER_ROLE (USERNAME, ROLENAME) VALUES ('admin', 'admin');
+INSERT INTO USER_ROLE (USERNAME, ROLENAME) VALUES ('admin', 'item-registration');
+
+INSERT INTO USER_ROLE (USERNAME, ROLENAME) VALUES ('user1', 'item-sell');
+INSERT INTO USER_ROLE (USERNAME, ROLENAME) VALUES ('user1', 'item-buy');
+INSERT INTO USER_ROLE (USERNAME, ROLENAME) VALUES ('user1', 'item-stat');
+
+INSERT INTO USER_ROLE (USERNAME, ROLENAME) VALUES ('user2', 'item-sell');
+INSERT INTO USER_ROLE (USERNAME, ROLENAME) VALUES ('user2', 'item-buy');
+INSERT INTO USER_ROLE (USERNAME, ROLENAME) VALUES ('user2', 'item-stat');
