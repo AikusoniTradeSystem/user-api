@@ -5,9 +5,9 @@ spring:
     name: user-api
   datasource:
     user-db:
-      url: ${DB_URL}
-      username: ${DB_USER}
-      password: ${DB_PASSWORD}
+      url: ${DB_URL:jdbc:postgresql://localhost:5432/user_db}
+      username: ${DB_USER:user_db}
+      password: ${DB_PASSWORD:user123}
       driver-class-name: ${DB_DRIVER_CLASS_NAME:org.postgresql.Driver}
   jpa:
     hibernate:
@@ -23,14 +23,18 @@ spring:
 
 
 vault:
-  uri: ${VAULT_URI:https://localhost:8200}
+  uri: ${VAULT_URI:https://ats-vault:8200}
   user-db-role:
     role-path: ${VAULT_USER_DB_ROLE_PATH:database/creds/ats-user-db-role}
-    role-id: ${VAULT_USER_DB_ROLE_ID}
-    secret-id: ${VAULT_USER_DB_SECRET_ID}
+    role-id: ${VAULT_USER_DB_ROLE_ID:12341234-1234-1234-1234-abcdefabcdef}
+    secret-id: ${VAULT_USER_DB_SECRET_ID:abcdef12-1234-1234-1234-abcdefabcdef}
+  ssl:
+    ignore-trust-store: ${VAULT_IGNORE_TRUST_STORE:true}
+    trust-store: ${VAULT_TRUST_STORE:./credentials/cert/ca/vault/ca.crt}
+    trust-store-password: ${VAULT_TRUST_STORE_PASSWORD:pwpw}
 
 server:
-  port: ${SERVER_PORT}
+  port: ${SERVER_PORT:8080}
   servlet:
     context-path: /api/user
     encoding:
@@ -88,6 +92,10 @@ spring:
   config:
     activate:
       on-profile: prod
+
+vault:
+  ssl:
+    ignore-trust-store: ${VAULT_IGNORE_TRUST_STORE:false}
 
 springdoc:
   swagger-ui:

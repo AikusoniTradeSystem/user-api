@@ -1,5 +1,6 @@
 package io.github.aikusoni.ats.user.api.config;
 
+import lombok.Builder;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.jdbc.DataSourceBuilder;
@@ -9,6 +10,8 @@ import org.springframework.context.annotation.Primary;
 import com.zaxxer.hikari.HikariDataSource;
 import org.springframework.vault.core.VaultTemplate;
 import org.springframework.vault.support.VaultResponseSupport;
+
+import java.util.Optional;
 
 @Configuration
 public class DataSourceConfig {
@@ -32,19 +35,23 @@ public class DataSourceConfig {
     @Bean(name = "userDbDataSource")
     public HikariDataSource userDbDataSource(VaultTemplate vaultTemplateUserDbRole) {
         VaultResponseSupport<DbCredentials> response = vaultTemplateUserDbRole.read(userDbRolePath, DbCredentials.class);
-        String username = response.getData().getUsername();
-        String password = response.getData().getPassword();
+
+        // Vault에서 접속 정보를 가져오는데 성공한 경우 볼트에서 제공한 정보로 초기화, 아니면 기본 정보로 접속 시도
+        DbCredentials dbCredentials = Optional.ofNullable(response)
+                .map(VaultResponseSupport::getData)
+                .orElse(DbCredentials.builder().username(userDbUsername).password(userDbPassword).build());
 
         return DataSourceBuilder.create()
                 .type(HikariDataSource.class)
                 .url(userDbUrl)
-                .username(username)
-                .password(password)
+                .username(dbCredentials.getUsername())
+                .password(dbCredentials.getPassword())
                 .driverClassName(userDbDriverClassName)
                 .build();
     }
 
     @Data
+    @Builder
     public static class DbCredentials {
         private String username;
         private String password;
