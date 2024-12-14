@@ -1,5 +1,6 @@
 package io.github.aikusoni.ats.user.api.config;
 
+import io.github.aikusoni.ats.user.api.constants.UserApiConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
@@ -11,14 +12,17 @@ import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactoryBuilder;
 import org.apache.hc.core5.ssl.SSLContextBuilder;
 import org.apache.hc.core5.ssl.TrustStrategy;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.vault.authentication.AppRoleAuthentication;
 import org.springframework.vault.authentication.AppRoleAuthenticationOptions;
+import org.springframework.vault.authentication.SessionManager;
+import org.springframework.vault.authentication.SimpleSessionManager;
+import org.springframework.vault.client.RestTemplateBuilder;
 import org.springframework.vault.client.VaultEndpoint;
 import org.springframework.vault.core.VaultTemplate;
+import org.springframework.vault.support.SslConfiguration;
 import org.springframework.web.client.RestTemplate;
 
 import javax.net.ssl.SSLContext;
@@ -27,6 +31,11 @@ import java.net.URI;
 import java.security.cert.X509Certificate;
 import java.util.Map;
 import java.util.Optional;
+
+import static io.github.aikusoni.ats.user.api.config.VaultRestTemplateProvider.createRestTemplate;
+import static io.github.aikusoni.ats.user.api.config.VaultRestTemplateProvider.createRestTemplateBuilder;
+import static io.github.aikusoni.ats.user.api.constants.UserApiConstants.REST_TEMPLATE_MODE_WITHOUT_TRUST_STORE;
+import static io.github.aikusoni.ats.user.api.constants.UserApiConstants.REST_TEMPLATE_MODE_WITH_TRUST_STORE;
 
 @Slf4j
 @Configuration
@@ -42,37 +51,31 @@ public class VaultConfig {
     @Value("${vault.user-db-role.secret-id}")
     private String userDbSecretId;
 
-    @Value("${vault.ssl.trust-store}")
-    private String trustStorePath;
+    @Value("${vault.user-db-role.trust-store}")
+    private String userDbRoleTrustStorePath;
 
-    @Value("${vault.ssl.trust-store-password}")
-    private String trustStorePassword;
+    @Value("${vault.user-db-role.trust-store-password}")
+    private String userDbRoleTrustStorePassword;
 
-    @Value("${vault.ssl.ignore-trust-store}")
-    private boolean ignoreTrustStore;
-
-    @Bean
+    @Bean(name = "vaultTemplateUserDbRole")
     public VaultTemplate vaultTemplateUserDbRole() {
         try {
-            RestTemplate restTemplate = restTemplate();
-            VaultEndpoint endpoint = VaultEndpoint.from(URI.create(vaultUri));
-            AppRoleAuthenticationOptions options = AppRoleAuthenticationOptions.builder()
-                    .roleId(AppRoleAuthenticationOptions.RoleId.provided(userDbRoleId))
-                    .secretId(AppRoleAuthenticationOptions.SecretId.provided(userDbSecretId))
-                    .build();
+            if (isVaultUsable()) {
+                VaultEndpoint endpoint = endpoint();
+                RestTemplateBuilder restTemplateBuilder = createRestTemplateBuilder(endpoint, userDbRoleTrustStorePath, userDbRoleTrustStorePassword);
+                AppRoleAuthenticationOptions options = AppRoleAuthenticationOptions.builder()
+                        .roleId(AppRoleAuthenticationOptions.RoleId.provided(userDbRoleId))
+                        .secretId(AppRoleAuthenticationOptions.SecretId.provided(userDbSecretId))
+                        .build();
 
-            String healthUrl = endpoint.createUriString("/sys/health");
-            Map<String, Object> healthMap = restTemplate.getForObject(healthUrl, Map.class);
-
-            Boolean isInitialized = (Boolean) healthMap.get("initialized");
-            Boolean isSealed = (Boolean) healthMap.get("sealed");
-            Integer serverTime = (Integer) healthMap.get("server_time_utc");
-
-            if (isInitialized && !isSealed) {
-                log.debug("Vault is initialized and unsealed. Server time: {}", serverTime);
-                AppRoleAuthentication auth = new AppRoleAuthentication(options, restTemplate);
+                AppRoleAuthentication auth = new AppRoleAuthentication(options, restTemplateBuilder.build());
                 auth.login();
-                return new VaultTemplate(endpoint, auth);
+                SessionManager sessionManager = new SimpleSessionManager(auth);
+
+                return new VaultTemplate(
+                        restTemplateBuilder
+                        , sessionManager
+                );
             } else {
                 throw new IllegalStateException("Vault is not in a usable state. Sealed or uninitialized.");
             }
@@ -81,56 +84,26 @@ public class VaultConfig {
         }
     }
 
-    public RestTemplate restTemplate() throws Exception {
-        if (ignoreTrustStore) {
-            return restTemplateWithoutTrustStore();
-        } else {
-            return restTemplateWithTrustStore();
+    private boolean isVaultUsable() {
+        try {
+            VaultEndpoint endpoint = endpoint();
+            RestTemplate restTemplate = createRestTemplate(endpoint(), userDbRoleTrustStorePath, userDbRoleTrustStorePassword);
+
+            String healthUrl = endpoint.createUriString("/sys/health");
+            Map<String, Object> healthMap = restTemplate.getForObject(healthUrl, Map.class);
+
+            Boolean isInitialized = (Boolean) healthMap.get("initialized");
+            Boolean isSealed = (Boolean) healthMap.get("sealed");
+//            Integer serverTime = (Integer) healthMap.get("server_time_utc");
+
+            return isInitialized && !isSealed;
+        } catch (Exception e) {
+            log.error("Unable to connect to Vault server", e);
+            return false;
         }
     }
 
-    public RestTemplate restTemplateWithoutTrustStore() throws Exception {
-        TrustStrategy acceptingTrustStrategy = (X509Certificate[] chain, String authType) -> true;
-
-        SSLContext sslContext = SSLContextBuilder.create()
-                .loadTrustMaterial(acceptingTrustStrategy)
-                .build();
-
-        SSLConnectionSocketFactory sslSocketFactory = SSLConnectionSocketFactoryBuilder.create()
-                .setSslContext(sslContext)
-                .setHostnameVerifier(NoopHostnameVerifier.INSTANCE)
-                .build();
-
-        PoolingHttpClientConnectionManager connectionManager = PoolingHttpClientConnectionManagerBuilder.create()
-                .setSSLSocketFactory(sslSocketFactory)
-                .build();
-
-        CloseableHttpClient httpClient = HttpClients.custom()
-                .setConnectionManager(connectionManager)
-                .build();
-
-        HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory(httpClient);
-        return new RestTemplateBuilder().requestFactory(() -> factory).build();
-    }
-
-    public RestTemplate restTemplateWithTrustStore() throws Exception {
-        SSLContext sslContext = SSLContextBuilder.create()
-                .loadTrustMaterial(new File(trustStorePath), Optional.ofNullable(trustStorePassword).map(String::toCharArray).orElse(null))
-                .build();
-
-        SSLConnectionSocketFactory sslSocketFactory = SSLConnectionSocketFactoryBuilder.create()
-                .setSslContext(sslContext)
-                .build();
-
-        PoolingHttpClientConnectionManager connectionManager = PoolingHttpClientConnectionManagerBuilder.create()
-                .setSSLSocketFactory(sslSocketFactory)
-                .build();
-
-        CloseableHttpClient httpClient = HttpClients.custom()
-                .setConnectionManager(connectionManager)
-                .build();
-
-        HttpComponentsClientHttpRequestFactory factory = new HttpComponentsClientHttpRequestFactory(httpClient);
-        return new RestTemplate(factory);
+    private VaultEndpoint endpoint() {
+        return VaultEndpoint.from(URI.create(vaultUri));
     }
 }

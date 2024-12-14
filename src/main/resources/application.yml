@@ -23,13 +23,11 @@ spring:
 
 
 vault:
-  uri: ${VAULT_URI:https://ats-vault:8200}
+  uri: ${VAULT_ADDR:https://vault.ats.internal:8200}
   user-db-role:
     role-path: ${VAULT_USER_DB_ROLE_PATH:database/creds/ats-user-db-role}
     role-id: ${VAULT_USER_DB_ROLE_ID:12341234-1234-1234-1234-abcdefabcdef}
     secret-id: ${VAULT_USER_DB_SECRET_ID:abcdef12-1234-1234-1234-abcdefabcdef}
-  ssl:
-    ignore-trust-store: ${VAULT_IGNORE_TRUST_STORE:true}
     trust-store: ${VAULT_TRUST_STORE:./credentials/cert/ca/vault/ca.crt}
     trust-store-password: ${VAULT_TRUST_STORE_PASSWORD:pwpw}
 
@@ -92,10 +90,6 @@ spring:
   config:
     activate:
       on-profile: prod
-
-vault:
-  ssl:
-    ignore-trust-store: ${VAULT_IGNORE_TRUST_STORE:false}
 
 springdoc:
   swagger-ui:
